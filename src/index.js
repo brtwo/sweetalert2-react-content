@@ -1,5 +1,5 @@
 import React from 'react'
-import { createRoot } from 'react-dom/client'
+import ReactDOM from 'react-dom'
 import { mounts } from './mounts'
 
 const noop = () => {} // eslint-disable-line @typescript-eslint/no-empty-function
@@ -21,22 +21,20 @@ export default function withReactContent(ParentSwal) {
     })
     return [reactParams, otherParams]
   }
-
   function render(swal, reactParams) {
     Object.entries(reactParams).forEach(([key, value]) => {
       const mount = mounts.find((mount) => mount.key === key)
       const domElement = mount.getter(ParentSwal)
-      const root = createRoot(domElement)
-      root.render(value)
-      swal.__roots.push(root)
+      ReactDOM.render(value, domElement)
+      swal.__mountedDomElements.push(domElement)
     })
   }
 
   function unrender(swal) {
-    swal.__roots.forEach((root) => {
-      root.unmount()
+    swal.__mountedDomElements.forEach((domElement) => {
+      ReactDOM.unmountComponentAtNode(domElement)
     })
-    swal.__roots = []
+    swal.__mountedDomElements = []
   }
 
   return class extends ParentSwal {
@@ -55,24 +53,16 @@ export default function withReactContent(ParentSwal) {
     }
 
     _main(params, mixinParams) {
-      this.__roots = []
+      this.__mountedDomElements = []
       this.__params = Object.assign({}, mixinParams, params)
       const [reactParams, otherParams] = extractReactParams(this.__params)
-      const superWillOpen = otherParams.willOpen || noop
       const superDidOpen = otherParams.didOpen || noop
       const superDidDestroy = otherParams.didDestroy || noop
       return super._main(
         Object.assign({}, otherParams, {
-          willOpen: (popup) => {
-            render(this, reactParams)
-            superWillOpen(popup)
-          },
           didOpen: (popup) => {
-            // read more about why this setTimeout is needed here:
-            // https://github.com/reactwg/react-18/discussions/5 (What about the render callback?)
-            setTimeout(() => {
-              superDidOpen(popup)
-            })
+            render(this, reactParams)
+            superDidOpen(popup)
           },
           didDestroy: (popup) => {
             superDidDestroy(popup)
